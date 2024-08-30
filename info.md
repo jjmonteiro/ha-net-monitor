@@ -1,0 +1,3 @@
+# <img src="https://brands.home-assistant.io/jokes/icon.png" alt="Network Monitor" width="50" height="50"/> Network Monitor
+
+The **Network Monitor** integration for Home Assistant allows you to monitor the number of devices connected to your local network. This custom sensor leverages the power of network scanning tools to provide real-time data on the number of active devices within a specified IP range.
