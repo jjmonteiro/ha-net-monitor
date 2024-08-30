@@ -1,0 +1,9 @@
+{
+  "domain": "net_monitor",
+  "name": "Network Monitor",
+  "version": "1.0",
+  "documentation": "https://example.com",
+  "dependencies": [],
+  "codeowners": ["@jjmonteiro"],
+  "requirements": ["scapy==2.4.5"]
+}
