@@ -15,6 +15,7 @@ sensor:
   - platform: net_monitor
     name: My Network Monitor  # Customize the sensor name
     ip_range: 192.168.1.1/24  # Replace with your network's IP range
+```
 
 ## Use Cases
 - **Network Security**: Keep an eye on how many devices are connected to your network to detect any unauthorized access.
