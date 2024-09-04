@@ -16,7 +16,7 @@ def scan_network(ip_range):
     for sent, received in result:
         devices.append(received.psrc)
 
-    return len(devices)
+    return len(devices)  # Ensure this is a numeric value
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Set up the sensor platform."""
@@ -45,4 +45,4 @@ class NetworkMonitorSensor(SensorEntity):
 
     def update(self):
         """Fetch new state data for the sensor."""
-        self._state = scan_network(self._ip_range)
+        self._state = scan_network(self._ip_range)  # Ensure this is numeric
