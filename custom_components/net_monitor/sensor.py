@@ -1,12 +1,13 @@
 import logging
 import asyncio
-import threading
+import ipaddress
+from pythonping import ping
 from typing import Optional, Dict
 from datetime import timedelta, datetime
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.const import CONF_SCAN_INTERVAL
-from scapy.all import ARP, Ether, srp
-import subprocess
+
+from scapy.all import IP, ICMP, sr1
+from scapy.layers.l2 import ARP, Ether, srp
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,18 +24,10 @@ def scan_network(ip_range: str) -> Dict[str, str]:
 
     return devices
 
-def ping_device(ip: str) -> bool:
-    """Ping a device to check if it is online."""
-    try:
-        output = subprocess.check_output(["ping", "-c", "1", ip], stderr=subprocess.STDOUT, universal_newlines=True)
-        return "1 packets transmitted, 1 received" in output
-    except subprocess.CalledProcessError:
-        return False
-
-def run_scan_network(ip_range: str, result: Dict[str, str]):
-    """Run network scan in a separate thread."""
-    devices = scan_network(ip_range)
-    result.update(devices)
+def ping_device(ip: str, timeout: int = 2) -> bool:
+    """Helper function to ping a single IP."""
+    response = ping(str(ip), count=1, timeout)
+    return response.success()
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Set up the sensor platform."""
@@ -48,7 +41,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     if not isinstance(scan_interval_config, dict):
         scan_interval_config = {}
 
-    minutes = scan_interval_config.get("minutes", 10)
+    minutes = scan_interval_config.get("minutes", 5)
     seconds = scan_interval_config.get("seconds", 0)
     scan_interval = timedelta(minutes=minutes, seconds=seconds)
 
@@ -71,8 +64,8 @@ class NetworkMonitorSensor(SensorEntity):
         self._state: Optional[int] = None
         self._last_scanned: Optional[datetime] = None
         self._detected_devices: Dict[str, str] = {}
-        self._device_status: Dict[str, int] = {}  # Track missed replies
-        self._attr_native_value = 0  # Initial value
+        self._no_reply: Dict[str, int] = {}
+        self._attr_native_value = 0
 
     @property
     def name(self) -> str:
@@ -115,47 +108,82 @@ class NetworkMonitorSensor(SensorEntity):
         return {
             "last_scanned": self._last_scanned,
             "detected_devices": self._detected_devices,
-            "device_status": self._device_status,
+            "unresponsive": self._no_reply,
         }
 
     async def async_update(self) -> None:
         """Fetch new state data for the sensor."""
         if self._last_scanned and datetime.now() - self._last_scanned < self._scan_interval:
+            _LOGGER.debug("async_update return")
+            await self.ping_no_reply_devices()  # Try to ping no_reply devices before returning
             return  # Skip update if the interval hasn't passed yet
 
         loop = asyncio.get_event_loop()
-        result = {}
 
-        # Run network scan in a separate thread
-        await loop.run_in_executor(None, run_scan_network, self._ip_range, result)
+        # Run network scan
+        current_devices = await loop.run_in_executor(None, scan_network, self._ip_range)
 
-        current_devices = result
+        # Add new devices to detected devices
+        self.add_new_devices(current_devices)
 
-        # Track devices that are currently detected
-        self._detected_devices = current_devices
+        # Handle devices that failed to respond in this scan
+        self.handle_missing_devices(current_devices)
 
-        # Update device status
-        for ip, mac in current_devices.items():
-            if ip in self._device_status:
-                self._device_status[ip] = 0  # Reset missed replies count if the device is detected
-            else:
-                self._device_status[ip] = 0  # Device detected for the first time
+        # Attempt to ping devices in the no_reply list
+        await self.ping_no_reply_devices()
 
-        # Check for devices that have gone offline
-        devices_to_remove = []
-        for ip, missed_replies in self._device_status.items():
-            if missed_replies >= DEVICE_OFFLINE_THRESHOLD:
-                devices_to_remove.append(ip)
-            else:
-                # Check if device is still online by pinging
-                if not ping_device(ip):
-                    self._device_status[ip] += 1  # Increment missed replies if the device is not reachable
+        # Remove offline devices that exceeded the no reply threshold
+        self.remove_offline_devices()
 
-        # Remove devices that are considered offline
-        for ip in devices_to_remove:
-            self._device_status.pop(ip)
-
-        self._state = len(self._device_status)
+        # Update the last scanned time and the state count
         self._last_scanned = datetime.now()
+        self._state = len(self._detected_devices)  # Count the devices still considered online
         self._attr_native_value = self._state
-        _LOGGER.debug("Network Monitor Sensor '%s' updated to %d devices", self._name, self._state)
+
+        _LOGGER.debug("Final detected devices list: %s", self._detected_devices)
+        _LOGGER.debug("Final online devices count: %d", self._state)
+        _LOGGER.debug("Unresponsive devices: %s", self._no_reply)
+
+    def add_new_devices(self, current_devices: Dict[str, str]) -> None:
+        """Add new devices to the detected devices list."""
+        for ip, mac in current_devices.items():
+            if ip not in self._detected_devices:
+                _LOGGER.debug("New device found: %s", ip)
+                self._detected_devices[ip] = mac  # Add to detected devices list
+
+    def handle_missing_devices(self, current_devices: Dict[str, str]) -> None:
+        """Handle devices that are missing from the current scan."""
+        updated_no_reply = self._no_reply.copy()  # Work on a copy of the current no-reply list
+
+        for ip in self._detected_devices.keys():
+            if ip not in current_devices:
+                _LOGGER.debug("Device %s failed to reply.", ip)
+                updated_no_reply[ip] = updated_no_reply.get(ip, 0) + 1  # Increment no-reply counter
+            else:
+                # If the device responded, remove it from the no-reply list if it was there
+                if ip in updated_no_reply and updated_no_reply[ip] == 0:
+                    del updated_no_reply[ip]
+
+        # Update no_reply with only devices with missed replies > 0
+        self._no_reply = {ip: count for ip, count in updated_no_reply.items() if count > 0}
+
+    async def ping_no_reply_devices(self) -> None:
+        """Ping devices in the no_reply list to see if they respond."""
+        for ip in list(self._no_reply.keys()):
+            ping_reply = ping_device(ip)
+            if ping_reply:
+                _LOGGER.debug("Device %s responded to ping.", ip)
+                del self._no_reply[ip]  # Remove from no_reply list if the device responded
+            else:
+                _LOGGER.debug("Device %s still unreachable after ping.", ip)
+
+    def remove_offline_devices(self) -> None:
+        """Remove devices from both lists that exceeded the offline threshold."""
+        offline_devices = [ip for ip, count in self._no_reply.items() if count >= DEVICE_OFFLINE_THRESHOLD]
+
+        for ip in offline_devices:
+            _LOGGER.debug("Device %s removed after exceeding the offline threshold.", ip)
+            if ip in self._detected_devices:
+                del self._detected_devices[ip]  # Remove from detected devices
+            del self._no_reply[ip]  # Remove from no_reply list
+        
