@@ -15,6 +15,9 @@ sensor:
   - platform: net_monitor
     name: My Network Monitor  # Customize the sensor name
     ip_range: 192.168.1.1/24  # Replace with your network's IP range
+    scan_interval:            # Optional: Set the interval between scans
+      minutes: 5  
+      seconds: 0
 ```
 
 ## Use Cases
