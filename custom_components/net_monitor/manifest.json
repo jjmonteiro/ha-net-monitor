@@ -1,7 +1,7 @@
 {
   "domain": "net_monitor",
   "name": "Network Monitor",
-  "version": "1.0",
+  "version": "1.0.0",
   "documentation": "https://github.com/jjmonteiro/ha-net-monitor",
   "dependencies": [],
   "codeowners": ["@jjmonteiro"],
