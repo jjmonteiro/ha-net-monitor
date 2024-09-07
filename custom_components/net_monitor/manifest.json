@@ -2,8 +2,9 @@
   "domain": "net_monitor",
   "name": "Network Monitor",
   "version": "1.0",
-  "documentation": "https://example.com",
+  "documentation": "https://github.com/jjmonteiro/ha-net-monitor",
   "dependencies": [],
   "codeowners": ["@jjmonteiro"],
-  "requirements": ["scapy==2.4.5"]
+  "requirements": ["scapy>=2.4.5", "pythonping>=1.0.8"]
 }
+
