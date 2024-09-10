@@ -1,50 +1,106 @@
 import logging
-import ipaddress
-from typing import Optional
+import asyncio
+from ipaddress import ip_network
 from datetime import timedelta, datetime
-from pythonping import ping
 from scapy.layers.l2 import ARP, Ether, srp
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from aioping import ping
+from typing import Optional
 from homeassistant.components.sensor import SensorEntity
-from functools import lru_cache
 
 _LOGGER = logging.getLogger(__name__)
 
-
-@lru_cache(maxsize=256)
-def ping_host(ip):
-    """Helper function to ping a single IP with caching."""
-    response = ping(str(ip), count=1, timeout=1)
-    return response.success()
+num_concurrent_tasks = 130
+ping_timeout = 1
+arp_timeout = 2
+semaphore = asyncio.Semaphore(num_concurrent_tasks)
 
 
-def icmp_scan_network(ip_range: str) -> set:
-    """Scan the network using ICMP requests in parallel."""
-    network = ipaddress.ip_network(ip_range, strict=False)
-    responsive_ips = set()
+# Helper Functions
+def parse_ip_range(ip_range_str):
+    """Get a list of IP addresses from an IP range."""
+    if '-' in ip_range_str:
+        ip_start, ip_end = ip_range_str.split('-')
+        ip_start_parts = ip_start.split('.')
+        ip_base = '.'.join(ip_start_parts[:-1])  # Get the first 3 octets
+        ip_start_last_octet = int(ip_start_parts[-1])
+        ip_end_last_octet = int(ip_end)
 
-    with ThreadPoolExecutor(max_workers=100) as executor:
-        futures = {executor.submit(ping_host, ip): ip for ip in network.hosts()}
-        for future in as_completed(futures):
-            if future.result():
-                responsive_ips.add(str(futures[future]))
-
-    _LOGGER.debug("ICMP scan result: %s", len(responsive_ips))
-    return responsive_ips
-
-
-def arp_scan_network(ip_range: str) -> set:
-    """Scan the network using ARP requests."""
-    arp = ARP(pdst=ip_range)
-    ether = Ether(dst="ff:ff:ff:ff:ff:ff")
-    packet = ether / arp
-    result = srp(packet, timeout=2, verbose=0)[0]
-    responsive_ips = {received.psrc for sent, received in result}
-
-    _LOGGER.debug("ARP scan result: %s", len(responsive_ips))
-    return responsive_ips
+        ip_list = [
+            f"{ip_base}.{i}"
+            for i in range(ip_start_last_octet, ip_end_last_octet + 1)
+        ]
+        return ip_list
+    else:
+        network = ip_network(ip_range_str, strict=False)
+        return [str(ip) for ip in network.hosts()]
 
 
+# ICMP Ping Functions
+async def async_ping_host(ip_str):
+    """Ping a single IP using ICMP."""
+    async with semaphore:
+        try:
+            ping_obj = ping(ip_str, timeout=ping_timeout)
+            if await ping_obj is not None:
+                return ip_str
+            else:
+                return None
+        except Exception:
+            return None
+
+
+async def async_icmp_scan_subnet(subnet: str) -> list:
+    """Perform an ICMP scan over a subnet or IP range."""
+    ip_list = parse_ip_range(subnet)
+    tasks = [async_ping_host(ip) for ip in ip_list]
+    results = await asyncio.gather(*tasks)
+    return [ip for ip in results if ip]
+
+
+async def async_icmp_scan_all_subnets(ip_ranges_str) -> list:
+    """Perform an ICMP scan on all provided subnets or ranges."""
+    all_responsive_ips = []
+    ip_ranges_list = [ip_range.strip() for ip_range in ip_ranges_str.split(',')]
+
+    for ip_range in ip_ranges_list:
+        _LOGGER.debug(f"Starting ICMP scan on {ip_range}")
+        responsive_ips = await async_icmp_scan_subnet(ip_range)
+        all_responsive_ips.extend(responsive_ips)
+
+    _LOGGER.debug(f"ICMP responsive hosts: {all_responsive_ips}")
+    return all_responsive_ips
+
+
+# ARP Functions
+async def async_arp_scan_subnet(subnet: str) -> set:
+    """Perform an ARP scan over a single subnet or IP range asynchronously."""
+    ip_list = parse_ip_range(subnet)
+
+    def run_srp():
+        arp = ARP(pdst=ip_list)
+        ether = Ether(dst="ff:ff:ff:ff:ff:ff")
+        packet = ether / arp
+        result = srp(packet, timeout=ping_timeout, verbose=0)[0]
+        return {received.psrc for sent, received in result}
+
+    return await asyncio.to_thread(run_srp)
+
+
+async def async_arp_scan_all_subnets(ip_ranges_str) -> list:
+    """Perform an ARP scan on all provided subnets or ranges asynchronously."""
+    all_responsive_ips = []
+    ip_ranges_list = [ip_range.strip() for ip_range in ip_ranges_str.split(',')]
+
+    for ip_range in ip_ranges_list:
+        _LOGGER.debug(f"Starting ARP scan on {ip_range}")
+        responsive_ips = await async_arp_scan_subnet(ip_range)
+        all_responsive_ips.extend(responsive_ips)
+
+    _LOGGER.debug(f"ARP responsive hosts: {all_responsive_ips}")
+    return all_responsive_ips
+
+
+# HA Functions
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Set up the sensor platform."""
     name = config.get("name")
@@ -77,6 +133,46 @@ class NetworkMonitorSensor(SensorEntity):
         self._arp_replies: Optional[int] = None
         self._icmp_replies: Optional[int] = None
         self._last_scanned: Optional[datetime] = None
+        self._background_task = None
+        self._setup_background_scan()
+
+    def _setup_background_scan(self):
+        """Set up the periodic background scan."""
+
+        async def periodic_scan():
+            while True:
+                await asyncio.sleep(self._scan_interval.total_seconds())
+                await self._perform_scan()
+
+        self._background_task = asyncio.create_task(periodic_scan())
+
+    async def _perform_scan(self):
+        """Perform the network scan and update the state."""
+        start_time = datetime.now()
+        _LOGGER.debug(f"Starting network scan at {datetime.now()}")
+
+        # Perform ICMP Scan
+        icmp_responsive_ips = await async_icmp_scan_all_subnets(self._ip_range)
+        _LOGGER.info(f"Total ICMP responsive hosts: {len(icmp_responsive_ips)}")
+        self._icmp_replies = len(icmp_responsive_ips)
+
+        # Perform ARP Scan
+        arp_responsive_ips = await async_arp_scan_all_subnets(self._ip_range)
+        _LOGGER.info(f"Total ARP responsive hosts: {len(arp_responsive_ips)}")
+        self._arp_replies = len(arp_responsive_ips)
+
+        # Combine both results
+        all_responsive_ips = list(set(icmp_responsive_ips + arp_responsive_ips))
+        self._state = len(all_responsive_ips)
+
+        _LOGGER.debug(f"Total responsive hosts: {all_responsive_ips}")
+        _LOGGER.info(f"Total detected devices: {len(all_responsive_ips)}")
+        elapsed_time = datetime.now() - start_time
+        _LOGGER.info(f"Time elapsed for full scan: {elapsed_time.total_seconds():.2f} seconds")
+
+        # Update remaining results
+        self._attr_native_value = self._state
+        self._last_scanned = datetime.now()
 
     @property
     def name(self) -> str:
@@ -101,7 +197,7 @@ class NetworkMonitorSensor(SensorEntity):
     @property
     def unique_id(self) -> str:
         """Return a unique ID for the sensor."""
-        return f"net_monitor_{self._name}_{self._ip_range.replace('/', '_')}"
+        return f"net_monitor_{self._ip_range.replace('/', '_')}"
 
     @property
     def available(self) -> bool:
@@ -117,22 +213,12 @@ class NetworkMonitorSensor(SensorEntity):
             "icmp_replies": self._icmp_replies,
         }
 
-    def update(self) -> None:
+    async def async_update(self) -> None:
         """Fetch new state data for the sensor."""
-        if self._last_scanned and datetime.now() - self._last_scanned < self._scan_interval:
-            return
-
-        _LOGGER.debug("Starting network scan at %s", datetime.now())
-
-        arp_responsive_ips = arp_scan_network(self._ip_range)
-        icmp_responsive_ips = icmp_scan_network(self._ip_range)
-
-        total_responsive_devices = arp_responsive_ips.union(icmp_responsive_ips)
-
-        self._last_scanned = datetime.now()
-        self._arp_replies = len(arp_responsive_ips)
-        self._icmp_replies = len(icmp_responsive_ips)
-        self._state = len(total_responsive_devices)
+        # Return the latest state without waiting for a scan to complete
         self._attr_native_value = self._state
-
-        _LOGGER.debug("Total detected devices: %s", len(total_responsive_devices))
+        self._attr_extra_state_attributes = {
+            "last_scanned": self._last_scanned,
+            "arp_replies": self._arp_replies,
+            "icmp_replies": self._icmp_replies,
+        }
