@@ -4,14 +4,18 @@
 
 The **Network Monitor** integration for Home Assistant allows you to monitor the number of devices connected to your local network. This custom sensor leverages the power of network scanning tools to provide real-time data on the number of active devices within a specified IP range.
 
-<p align="center">
-<img src="https://github.com/user-attachments/assets/fd8355b9-4d29-47b2-a57e-24fb0ae82cca">
-</p>
-
 ## Features
 - **Custom IP Range**: Specify the IP range to scan, allowing for tailored monitoring of different network segments.
 - **Real-Time Monitoring**: Regularly updates the count of devices on your network, helping you keep track of connected devices.
 - **Multiple Protocol**: ICMP and ARP scanner for maximum detection accuracy.
+
+## Use Cases
+- **Network Security**: Keep an eye on how many devices are connected to your network and detect unauthorized access.
+- **Home Automation**: Trigger automations based on the number of devices connected to your network.
+- **Network Management**: Monitor network congestion and usage patterns by tracking device counts over time.
+
+## Installation
+This integration can be easily installed via [HACS](https://hacs.xyz/) by adding the repository to your custom repositories list.
 
 ## Configuration
 To configure the `Network Monitor` sensor, add the following to your `configuration.yaml`:
@@ -26,10 +30,6 @@ sensor:
       seconds: 0
 ```
 
-## Use Cases
-- **Network Security**: Keep an eye on how many devices are connected to your network and detect unauthorized access.
-- **Home Automation**: Trigger automations based on the number of devices connected to your network.
-- **Network Management**: Monitor network congestion and usage patterns by tracking device counts over time.
+## Screenshots
+![365389860-6333d361-97f3-4d7b-b032-985a9ac3d645](https://github.com/user-attachments/assets/480e9e66-5cd5-4aad-acfa-48cf6f677437)
 
-## Installation
-This integration can be easily installed via [HACS](https://hacs.xyz/) by adding the repository to your custom repositories list.
