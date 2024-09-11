@@ -1,10 +1,11 @@
 {
   "domain": "net_monitor",
   "name": "Network Monitor",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "documentation": "https://github.com/jjmonteiro/ha-net-monitor",
+  "issue_tracker": "https://github.com/jjmonteiro/ha-net-monitor/issues",
   "dependencies": [],
   "codeowners": ["@jjmonteiro"],
-  "requirements": ["scapy>=2.4.5", "pythonping>=1.0.8"]
+  "requirements": ["scapy>=2.4.5", "aioping>=0.4.0"]
 }
 
