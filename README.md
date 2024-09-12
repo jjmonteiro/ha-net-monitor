@@ -1,8 +1,14 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/custom-components/hacs) 
 ![GitHub release](https://img.shields.io/github/release/jjmonteiro/ha-net-monitor.svg)
+
 # Network Monitor Sensor
 
 The **Network Monitor** integration for Home Assistant allows you to monitor the number of devices connected to your local network. This custom sensor leverages the power of network scanning tools to provide real-time data on the number of active devices within a specified IP range.
+
+<p align="center">
+  <img src="images/card.png" style="height:350px">
+  <img src="images/graph.png" style="height:350px">
+</p>
 
 ## Features
 - **Custom IP Range**: Specify the IP range to scan, allowing for tailored monitoring of different network segments.
@@ -15,7 +21,9 @@ The **Network Monitor** integration for Home Assistant allows you to monitor the
 - **Network Management**: Monitor network congestion and usage patterns by tracking device counts over time.
 
 ## Installation
-This integration can be easily installed via [HACS](https://hacs.xyz/) by adding the repository to your custom repositories list.
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=jjmonteiro&repository=ha-net-monitor&category=Integration)
+
+This integration can also be easily installed via [HACS](https://hacs.xyz/) by adding the repository url to your custom repositories list.
 
 ## Configuration
 To configure the `Network Monitor` sensor, add the following to your `configuration.yaml`:
@@ -29,7 +37,3 @@ sensor:
       minutes: 5  
       seconds: 0
 ```
-
-## Screenshots
-![365389860-6333d361-97f3-4d7b-b032-985a9ac3d645](https://github.com/user-attachments/assets/480e9e66-5cd5-4aad-acfa-48cf6f677437)
-
