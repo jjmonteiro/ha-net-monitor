@@ -11,9 +11,9 @@ The **Network Monitor** integration for Home Assistant allows you to monitor the
 </p>
 
 ## Features
-- **Custom IP Range**: Specify the IP range to scan, allowing for tailored monitoring of different network segments.
-- **Real-Time Monitoring**: Regularly updates the count of devices on your network, helping you keep track of connected devices.
-- **Multiple Protocol**: ICMP and ARP scanner for maximum detection accuracy.
+- **Custom IP Range**: Specify the IP range to scan, allowing for tailored monitoring of different network segments. Supports multiple formats, including CIDR notation and custom-defined ranges, separated by commas.
+- **Real-Time Monitoring**: Regularly updates the count of devices on your network, helping you keep track of connected devices. The scanner can run immediately after completing, only pausing for the pre-defined scan interval.
+- **Multiple Protocol**: Utilizes both ICMP and ARP protocols scanning for maximum detection accuracy.
 
 ## Use Cases
 - **Network Security**: Keep an eye on how many devices are connected to your network and detect unauthorized access.
