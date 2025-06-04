@@ -1,3 +1,11 @@
+---
+name: Bug report
+about: Report a problem with the net_monitor integration
+title: "[Bug]: "
+labels: bug
+assignees: 
+---
+
 ## Describe the issue
 A clear and concise description of what the problem is.
 
