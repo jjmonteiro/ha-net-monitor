@@ -1,0 +1,58 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "data": {
+                    "name": "Sensor Name",
+                    "ip_range": "IP Range (e.g., 192.168.1.0/24 or 192.168.1.1-192.168.1.254)",
+                    "scan_interval": "Scan Interval (seconds)"
+                },
+                "title": "Network Monitor Setup"
+            }
+        },
+        "abort": {
+            "already_configured": "An entry with this IP range is already configured."
+        },
+        "error": {
+            "invalid_ip_range": "Invalid IP range format. Please use CIDR notation (e.g., 192.168.1.0/24) or a range (e.g., 192.168.1.1-192.168.1.254)."
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "data": {
+                    "name": "Sensor Name",
+                    "ip_range": "IP Range (e.g., 192.168.1.0/24 or 192.168.1.1-192.168.1.254)",
+                    "scan_interval": "Scan Interval (seconds)"
+                },
+                "title": "Configure Network Monitor"
+            }
+        },
+        "abort": {
+            "already_configured": "An entry with this IP range is already configured."
+        },
+        "error": {
+            "invalid_ip_range": "Invalid IP range format. Please use CIDR notation (e.g., 192.168.1.0/24) or a range (e.g., 192.168.1.1-192.168.1.254)."
+        }
+    },
+    "entity_attributes": {
+        "sensor": {
+            "monitor": {
+                "state_attributes": {
+                    "arp_replies": {
+                        "name": "ARP Replies"
+                    },
+                    "icmp_replies": {
+                        "name": "ICMP Replies"
+                    },
+                    "last_scan": {
+                        "name": "Last Scan"
+                    },
+                    "time_scan": {
+                        "name": "Scan Duration"
+                    }
+                }
+            }
+        }
+    }
+}

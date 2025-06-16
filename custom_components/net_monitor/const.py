@@ -1,0 +1,11 @@
+"""Constants for the Network Monitor integration."""
+
+DOMAIN = "net_monitor"
+DEFAULT_NAME = "Online Devices"
+DEFAULT_IP_RANGE = "192.168.1.0/24"
+
+DEFAULT_SCAN_INTERVAL = 300  # seconds
+DEFAULT_NUM_CONCURRENT_TASKS = 100
+DEFAULT_PING_TIMEOUT = 1
+DEFAULT_ARP_TIMEOUT = 1
+DEFAULT_BATCH_SIZE = 256
