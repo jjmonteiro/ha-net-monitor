@@ -23,15 +23,11 @@ What did you expect to happen?
 
 ## Logs
 
-To enable debug logs for `net_monitor`, add the following to your `configuration.yaml`:
+Click ‘Enable debug logging’ in the integration’s settings, then restart Home Assistant.
 
-```yaml
-logger:
-  logs:
-    custom_components.net_monitor: debug
-```
+Reproduce the issue, go to Settings → System → Logs, and use ‘Download logs’ from the top-right menu.
 
-Then restart HA, wait 5 minutes and under Settings > System > Logs and select 'Download logs' from the upper right menu.
+When done, disable debug logging and restart Home Assistant again.
 
 ```
 **Please paste debug logs below.**  
