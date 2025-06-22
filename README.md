@@ -34,7 +34,8 @@ Configuration is now handled entirely via the Home Assistant UI using the built-
 To set up the Network Monitor integration:
 - Go to **Settings > Devices & Services > Integrations** in Home Assistant.
 - Click **"Add Integration"** and search for **Network Monitor**.
-- Enter your desired sensor name, IP range (CIDR or range), and scan interval.
+- Enter your desired sensor name, IP range (CIDR or range), and scan interval (pause between scans).
+- Create as many sensors as required, adjust consider online setting as necessary.
 - You can change these options at any time from the integration's options menu in the UI.
 
 ### Sensor State and Attributes

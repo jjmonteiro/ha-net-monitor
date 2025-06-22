@@ -6,7 +6,7 @@ import voluptuous as vol
 from ipaddress import ip_network, ip_address
 from homeassistant import config_entries
 from homeassistant.core import callback
-from .const import DOMAIN, DEFAULT_SCAN_INTERVAL, DEFAULT_IP_RANGE, DEFAULT_NAME
+from .const import DOMAIN, DEFAULT_SCAN_INTERVAL, DEFAULT_IP_RANGE, DEFAULT_NAME, CONSIDER_ONLINE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,11 +52,48 @@ def validate_ip_range(ip_range: str) -> bool:
 
 def _validate_ip_range(ip_range: str) -> Optional[str]:
     """Validate the IP range format."""
-    try:
-        ip_network(ip_range, strict=False)
-        return None
-    except ValueError:
-        return "invalid_ip_range"
+    # Check for CIDR notation
+    if '/' in ip_range:
+        try:
+            ip_network(ip_range, strict=False)
+            return None
+        except ValueError:
+            return "invalid_ip_range"
+    
+    # Check for range notation (e.g., 192.168.1.1-192.168.1.254 or 192.168.1.1-254 or 192.168.1.1-255)
+    if '-' in ip_range:
+        try:
+            start, end = ip_range.split('-')
+            # Validate start IP
+            start_ip = ip_address(start)
+            
+            # If end is just a number, assume it's the last octet
+            if '.' not in end:
+                end_parts = start.split('.')
+                if len(end_parts) != 4:
+                    return "invalid_ip_range"
+                # Allow end number up to 255
+                end_num = int(end)
+                if not (0 <= end_num <= 255):
+                    return "invalid_ip_range"
+                end = '.'.join(end_parts[:-1] + [end])
+            
+            # Validate end IP
+            end_ip = ip_address(end)
+            
+            # Ensure both IPs are IPv4
+            if start_ip.version != 4 or end_ip.version != 4:
+                return "invalid_ip_range"
+            
+            # Ensure start IP is less than or equal to end IP
+            if start_ip > end_ip:
+                return "invalid_ip_range"
+                
+            return None
+        except (ValueError, IndexError):
+            return "invalid_ip_range"
+    
+    return "invalid_ip_range"
 
 class NetworkMonitorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Network Monitor."""
@@ -82,16 +119,20 @@ class NetworkMonitorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if validation_result:
                 errors["ip_range"] = validation_result
             else:
-                # Check if an entry with the same IP range already exists
-                existing_entries = self.hass.config_entries.async_entries(DOMAIN)
-                if any(
-                    entry.data["ip_range"] == user_input["ip_range"]
-                    for entry in existing_entries
-                ):
-                    return self.async_abort(reason="already_configured")
+                # Validate consider_online value
+                if not (0 <= user_input["consider_online"] <= 10):
+                    errors["consider_online"] = "invalid_value"
+                else:
+                    # Check if an entry with the same IP range already exists
+                    existing_entries = self.hass.config_entries.async_entries(DOMAIN)
+                    if any(
+                        entry.data["ip_range"] == user_input["ip_range"]
+                        for entry in existing_entries
+                    ):
+                        return self.async_abort(reason="already_configured")
 
-                _LOGGER.info("Creating new Network Monitor entry for IP range: %s", user_input["ip_range"])
-                return self.async_create_entry(title=user_input["name"], data=user_input)
+                    _LOGGER.info("Creating new Network Monitor entry for IP range: %s", user_input["ip_range"])
+                    return self.async_create_entry(title=user_input["name"], data=user_input)
 
         return self.async_show_form(
             step_id="user",
@@ -101,6 +142,9 @@ class NetworkMonitorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required("ip_range", default=DEFAULT_IP_RANGE): str,
                     vol.Required(
                         "scan_interval", default=DEFAULT_SCAN_INTERVAL
+                    ): int,
+                    vol.Required(
+                        "consider_online", default=CONSIDER_ONLINE
                     ): int,
                 }
             ),
@@ -150,22 +194,26 @@ class NetworkMonitorOptionsFlow(config_entries.OptionsFlow):
             if validation_result:
                 errors["ip_range"] = validation_result
             else:
-                # Check if another entry with the same IP range exists
-                existing_entries = self.hass.config_entries.async_entries(DOMAIN)
-                if any(
-                    entry.data["ip_range"] == user_input["ip_range"]
-                    and entry.entry_id != self.entry.entry_id
-                    for entry in existing_entries
-                ):
-                    errors["ip_range"] = "already_configured"
+                # Validate consider_online value
+                if not (0 <= user_input["consider_online"] <= 10):
+                    errors["consider_online"] = "invalid_value"
                 else:
-                    # Update the config entry
-                    self.hass.config_entries.async_update_entry(
-                        self.entry,
-                        data=user_input,
-                        title=user_input["name"]
-                    )
-                    return self.async_create_entry(title="", data={})
+                    # Check if another entry with the same IP range exists
+                    existing_entries = self.hass.config_entries.async_entries(DOMAIN)
+                    if any(
+                        entry.data["ip_range"] == user_input["ip_range"]
+                        and entry.entry_id != self.entry.entry_id
+                        for entry in existing_entries
+                    ):
+                        errors["ip_range"] = "already_configured"
+                    else:
+                        # Update the config entry
+                        self.hass.config_entries.async_update_entry(
+                            self.entry,
+                            data=user_input,
+                            title=user_input["name"]
+                        )
+                        return self.async_create_entry(title="", data={})
 
         return self.async_show_form(
             step_id="init",
@@ -182,6 +230,10 @@ class NetworkMonitorOptionsFlow(config_entries.OptionsFlow):
                     vol.Required(
                         "scan_interval",
                         default=self.entry.data.get("scan_interval", DEFAULT_SCAN_INTERVAL)
+                    ): int,
+                    vol.Required(
+                        "consider_online",
+                        default=self.entry.data.get("consider_online", CONSIDER_ONLINE)
                     ): int,
                 }
             ),

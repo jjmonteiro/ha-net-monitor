@@ -9,7 +9,10 @@ from scapy.layers.l2 import ARP, Ether, srp
 from aioping import ping
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.core import Event, HomeAssistant
-from .const import DEFAULT_SCAN_INTERVAL, DEFAULT_NUM_CONCURRENT_TASKS, DEFAULT_PING_TIMEOUT, DEFAULT_ARP_TIMEOUT, DEFAULT_BATCH_SIZE
+from .const import (
+    DEFAULT_SCAN_INTERVAL, DEFAULT_NUM_CONCURRENT_TASKS, DEFAULT_PING_TIMEOUT,
+    DEFAULT_ARP_TIMEOUT, DEFAULT_BATCH_SIZE, CONSIDER_ONLINE
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -136,6 +139,7 @@ class NetworkMonitorCoordinator(DataUpdateCoordinator):
         self._startup_listener: Optional[Callable[[Event], None]] = None
         self._startup_listener_remover: Optional[Callable[[], None]] = None
         self._startup_listener_executed = False
+        self._device_failures: Dict[str, int] = {}  # Track consecutive failures for each device
         
         _LOGGER.debug("Initializing coordinator with IP range: %s, scan interval: %s",
                      self.ip_range, self.wait_time)
@@ -145,6 +149,35 @@ class NetworkMonitorCoordinator(DataUpdateCoordinator):
             _LOGGER,
             name="Network Monitor",
         )
+
+    def _update_device_status(self, responding_devices: Set[str]) -> None:
+        """Update device status based on responses and CONSIDER_ONLINE threshold.
+        
+        Args:
+            responding_devices: Set of devices that responded in the current scan
+        """
+        # Update failures for all known devices
+        for device in self._device_failures:
+            if device not in responding_devices:
+                self._device_failures[device] += 1
+            else:
+                self._device_failures[device] = 0
+        
+        # Add new devices that responded
+        for device in responding_devices:
+            if device not in self._device_failures:
+                self._device_failures[device] = 0
+        
+        # Remove devices that have exceeded the failure threshold
+        offline_devices = {
+            device for device, failures in self._device_failures.items()
+            if failures > CONSIDER_ONLINE
+        }
+        for device in offline_devices:
+            del self._device_failures[device]
+        
+        _LOGGER.debug("Device status update - Online: %d, Offline: %d",
+                     len(self._device_failures), len(offline_devices))
 
     async def _scan_loop(self) -> None:
         """Main background loop for network scanning.
@@ -268,11 +301,17 @@ class NetworkMonitorCoordinator(DataUpdateCoordinator):
                 await asyncio.sleep(0)
             _LOGGER.debug("ARP scan complete: %d replies", len(arp_replies))
 
+            # Combine ICMP and ARP replies
+            responding_devices = icmp_replies | set(arp_replies.values())
+            
+            # Update device status based on responses
+            self._update_device_status(responding_devices)
+
             end_time = time.time()
             scan_duration = round(end_time - start_time, 2)
             self._last_icmp_set = icmp_replies
             self._last_arp_set = set(arp_replies.values())
-            total_online = icmp_replies | set(arp_replies.values())
+            total_online = set(self._device_failures.keys())  # Only count devices that haven't exceeded failure threshold
             _LOGGER.info("Scan complete for %s in %s seconds. Found %d online devices.",
                          self.ip_range, scan_duration, len(total_online))
             return {

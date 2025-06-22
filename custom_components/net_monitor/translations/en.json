@@ -5,7 +5,8 @@
                 "data": {
                     "name": "Sensor Name",
                     "ip_range": "IP Range (e.g., 192.168.1.0/24 or 192.168.1.1-192.168.1.254)",
-                    "scan_interval": "Scan Interval (seconds)"
+                    "scan_interval": "Scan Interval (pause between scans in seconds)",
+                    "consider_online": "Consider Online (consecutive failures before marking offline)"
                 },
                 "title": "Network Monitor Setup"
             }
@@ -14,7 +15,8 @@
             "already_configured": "An entry with this IP range is already configured."
         },
         "error": {
-            "invalid_ip_range": "Invalid IP range format. Please use CIDR notation (e.g., 192.168.1.0/24) or a range (e.g., 192.168.1.1-192.168.1.254)."
+            "invalid_ip_range": "Invalid IP range format. Please use CIDR notation (e.g., 192.168.1.0/24) or a range (e.g., 192.168.1.1-192.168.1.254).",
+            "invalid_value": "Value must be a number between 0 and 10."
         }
     },
     "options": {
@@ -23,7 +25,8 @@
                 "data": {
                     "name": "Sensor Name",
                     "ip_range": "IP Range (e.g., 192.168.1.0/24 or 192.168.1.1-192.168.1.254)",
-                    "scan_interval": "Scan Interval (seconds)"
+                    "scan_interval": "Scan Interval (pause between scans in seconds)",
+                    "consider_online": "Consider Online (consecutive failures before marking offline)"
                 },
                 "title": "Configure Network Monitor"
             }
@@ -32,7 +35,8 @@
             "already_configured": "An entry with this IP range is already configured."
         },
         "error": {
-            "invalid_ip_range": "Invalid IP range format. Please use CIDR notation (e.g., 192.168.1.0/24) or a range (e.g., 192.168.1.1-192.168.1.254)."
+            "invalid_ip_range": "Invalid IP range format. Please use CIDR notation (e.g., 192.168.1.0/24) or a range (e.g., 192.168.1.1-192.168.1.254).",
+            "invalid_value": "Value must be a number between 0 and 10."
         }
     },
     "entity_attributes": {
